@@ -4,41 +4,49 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Event;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\View\View;
 
 class EventController extends Controller
 {
-    public function index()
+    public function index(): View
     {
-        $events = Event::latest()->paginate(15);
+        $events = Event::withCount(['cabangOlahraga', 'kontingen', 'panitia'])
+            ->latest('tanggal_mulai')
+            ->paginate(15);
 
         return view('admin.event.index', compact('events'));
     }
 
-    public function create()
+    public function create(): View
     {
         return view('admin.event.create');
     }
 
-    public function store(Request $request)
+    public function store(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'nama' => ['required', 'string', 'max:200'],
-            'singkatan' => ['nullable', 'string', 'max:20'],
+            'nama' => ['required', 'string', 'max:255'],
             'deskripsi' => ['nullable', 'string'],
-            'tuan_rumah' => ['nullable', 'string', 'max:150'],
-            'kota' => ['nullable', 'string', 'max:100'],
-            'tanggal_mulai_event' => ['required', 'date'],
-            'tanggal_selesai_event' => ['required', 'date', 'after_or_equal:tanggal_mulai_event'],
-            'tanggal_mulai_pendaftaran' => ['nullable', 'date'],
-            'tanggal_tutup_pendaftaran' => ['nullable', 'date'],
-            'batas_usia_min' => ['nullable', 'integer', 'min:5'],
-            'batas_usia_max' => ['nullable', 'integer', 'max:99'],
-            'peraturan_umum' => ['nullable', 'string'],
+            'tanggal_mulai' => ['required', 'date'],
+            'tanggal_selesai' => ['required', 'date', 'after_or_equal:tanggal_mulai'],
+            'tanggal_patokan_umur' => ['required', 'date'],
+            'pendaftaran_mulai' => ['required', 'date'],
+            'pendaftaran_selesai' => ['required', 'date', 'after:pendaftaran_mulai'],
+            'maks_nomor_lomba_per_atlet' => ['nullable', 'integer', 'min:1', 'max:10'],
+            'logo' => ['nullable', 'image', 'max:2048'],
+            'status' => ['required', Rule::in(['draft', 'pendaftaran_dibuka', 'pendaftaran_ditutup', 'berlangsung', 'selesai'])],
         ]);
 
-        $data['status'] = 'draft';
+        $data['slug'] = Str::slug($data['nama']);
+
+        if ($request->hasFile('logo')) {
+            $data['logo_path'] = $request->file('logo')->store('event/logo', 'public');
+        }
 
         $event = Event::create($data);
 
@@ -46,35 +54,40 @@ class EventController extends Controller
             ->with('success', 'Event berhasil dibuat.');
     }
 
-    public function show(Event $event)
+    public function show(Event $event): View
     {
-        $event->loadCount(['cabangOlahraga', 'kontingen', 'pertandingan']);
+        $event->loadCount(['cabangOlahraga', 'kontingen', 'panitia', 'venues']);
+        $event->load(['cabangOlahraga', 'kontingen', 'venues']);
 
         return view('admin.event.show', compact('event'));
     }
 
-    public function edit(Event $event)
+    public function edit(Event $event): View
     {
         return view('admin.event.edit', compact('event'));
     }
 
-    public function update(Request $request, Event $event)
+    public function update(Request $request, Event $event): RedirectResponse
     {
         $data = $request->validate([
-            'nama' => ['required', 'string', 'max:200'],
-            'singkatan' => ['nullable', 'string', 'max:20'],
+            'nama' => ['required', 'string', 'max:255'],
             'deskripsi' => ['nullable', 'string'],
-            'tuan_rumah' => ['nullable', 'string', 'max:150'],
-            'kota' => ['nullable', 'string', 'max:100'],
-            'tanggal_mulai_event' => ['required', 'date'],
-            'tanggal_selesai_event' => ['required', 'date', 'after_or_equal:tanggal_mulai_event'],
-            'tanggal_mulai_pendaftaran' => ['nullable', 'date'],
-            'tanggal_tutup_pendaftaran' => ['nullable', 'date'],
-            'batas_usia_min' => ['nullable', 'integer', 'min:5'],
-            'batas_usia_max' => ['nullable', 'integer', 'max:99'],
-            'peraturan_umum' => ['nullable', 'string'],
-            'status' => ['nullable', Rule::in(['draft', 'pendaftaran_dibuka', 'pendaftaran_ditutup', 'berlangsung', 'selesai'])],
+            'tanggal_mulai' => ['required', 'date'],
+            'tanggal_selesai' => ['required', 'date', 'after_or_equal:tanggal_mulai'],
+            'tanggal_patokan_umur' => ['required', 'date'],
+            'pendaftaran_mulai' => ['required', 'date'],
+            'pendaftaran_selesai' => ['required', 'date'],
+            'maks_nomor_lomba_per_atlet' => ['nullable', 'integer', 'min:1', 'max:10'],
+            'logo' => ['nullable', 'image', 'max:2048'],
+            'status' => ['required', Rule::in(['draft', 'pendaftaran_dibuka', 'pendaftaran_ditutup', 'berlangsung', 'selesai'])],
         ]);
+
+        if ($request->hasFile('logo')) {
+            if ($event->logo_path) {
+                Storage::disk('public')->delete($event->logo_path);
+            }
+            $data['logo_path'] = $request->file('logo')->store('event/logo', 'public');
+        }
 
         $event->update($data);
 
@@ -82,18 +95,16 @@ class EventController extends Controller
             ->with('success', 'Event berhasil diperbarui.');
     }
 
-    public function destroy(Event $event)
+    public function destroy(Event $event): RedirectResponse
     {
+        $nama = $event->nama;
         $event->delete();
 
         return redirect()->route('admin.event.index')
-            ->with('success', 'Event berhasil dihapus.');
+            ->with('success', "Event '{$nama}' berhasil dihapus.");
     }
 
-    /**
-     * Transition event to next valid status.
-     */
-    public function aktivasi(Request $request, Event $event)
+    public function aktivasi(Request $request, Event $event): RedirectResponse
     {
         $request->validate([
             'status' => ['required', Rule::in(['draft', 'pendaftaran_dibuka', 'pendaftaran_ditutup', 'berlangsung', 'selesai'])],

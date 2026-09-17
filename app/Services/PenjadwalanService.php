@@ -5,9 +5,160 @@ namespace App\Services;
 use App\Models\Lapangan;
 use App\Models\Pertandingan;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Collection;
 
 class PenjadwalanService
 {
+    /**
+     * Mengambil matriks jadwal untuk tampilan papan jadwal (JDW-01)
+     *
+     * @return array{
+     *     tanggal: string,
+     *     lapangan: Collection,
+     *     slots: array<string>,
+     *     pertandingan: Collection,
+     *     unallocated: Collection,
+     *     matrix: array<int, array<string, Pertandingan|null>>,
+     *     konflik: array
+     * }
+     */
+    public function getMatrix(string $tanggal, ?int $caborId = null, ?int $venueId = null): array
+    {
+        $lapanganQuery = Lapangan::with('venue')->orderBy('venue_id')->orderBy('nama');
+        if ($venueId) {
+            $lapanganQuery->where('venue_id', $venueId);
+        }
+        $lapanganList = $lapanganQuery->get();
+
+        $lagaQuery = Pertandingan::whereDate('tanggal', $tanggal)
+            ->whereNotNull('lapangan_id')
+            ->whereNotNull('waktu_mulai')
+            ->whereNotIn('status', ['dibatalkan'])
+            ->with([
+                'lapangan.venue',
+                'nomorLomba.cabangOlahraga',
+                'pesertaPertandingan.peserta',
+                'penugasanPanitia.panitia',
+            ]);
+
+        if ($caborId) {
+            $lagaQuery->whereHas('nomorLomba', fn ($q) => $q->where('cabang_olahraga_id', $caborId));
+        }
+
+        $pertandingans = $lagaQuery->get();
+
+        // Pertandingan yang belum dialokasikan (belum ada lapangan / waktu)
+        $unallocated = Pertandingan::where(function ($q) use ($tanggal) {
+            $q->whereNull('lapangan_id')
+                ->orWhereNull('waktu_mulai')
+                ->orWhereDate('tanggal', $tanggal);
+        })
+            ->where('status', 'draft')
+            ->with(['nomorLomba.cabangOlahraga', 'pesertaPertandingan.peserta'])
+            ->get();
+
+        $konflikResult = $this->deteksiKonflik($tanggal);
+
+        // Slot waktu interval 30 menit dari 07:00 sampai 21:00
+        $slots = [];
+        $startTime = Carbon::parse('07:00');
+        $endTime = Carbon::parse('21:00');
+
+        while ($startTime->lte($endTime)) {
+            $slots[] = $startTime->format('H:i');
+            $startTime->addMinutes(30);
+        }
+
+        // Susun struktur matrix: [lapangan_id][time_slot] => Pertandingan
+        $matrix = [];
+        foreach ($lapanganList as $lap) {
+            $matrix[$lap->id] = [];
+            foreach ($slots as $slot) {
+                $matrix[$lap->id][$slot] = null;
+            }
+        }
+
+        foreach ($pertandingans as $match) {
+            if (isset($matrix[$match->lapangan_id])) {
+                $timeFormatted = substr($match->waktu_mulai, 0, 5);
+                $matrix[$match->lapangan_id][$timeFormatted] = $match;
+            }
+        }
+
+        return [
+            'tanggal' => $tanggal,
+            'lapangan' => $lapanganList,
+            'slots' => $slots,
+            'pertandingan' => $pertandingans,
+            'pertandingans' => $pertandingans,
+            'unallocated' => $unallocated,
+            'matrix' => $matrix,
+            'konflik' => $konflikResult,
+        ];
+    }
+
+    /**
+     * Alias for backward compatibility
+     */
+    public function getPapanJadwal(string $tanggal, ?int $caborId = null, ?int $venueId = null): array
+    {
+        return $this->getMatrix($tanggal, $caborId, $venueId);
+    }
+
+    /**
+     * Alokasikan slot pertandingan baru (JDW-02)
+     */
+    public function alokasiSlot(
+        Pertandingan $pertandingan,
+        int $lapanganId,
+        string $tanggal,
+        string $waktuMulai,
+        ?int $durasiMenit = null
+    ): array {
+        $result = $this->pindahkanSlot($pertandingan, $lapanganId, $tanggal, $waktuMulai, $durasiMenit);
+
+        if (! $result['berhasil']) {
+            throw new \RuntimeException($result['pesan']);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Pindahkan slot pertandingan yang sudah terjadwal (JDW-04)
+     */
+    public function pindahSlot(
+        Pertandingan $pertandingan,
+        int $lapanganIdBaru,
+        string $tanggalBaru,
+        string $waktuMulaiBaru,
+        ?int $durasiMenit = null
+    ): array {
+        $result = $this->pindahkanSlot($pertandingan, $lapanganIdBaru, $tanggalBaru, $waktuMulaiBaru, $durasiMenit);
+
+        if (! $result['berhasil']) {
+            throw new \RuntimeException($result['pesan']);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Publikasikan jadwal pertandingan (JDW-05)
+     */
+    public function publikasikan(Pertandingan $pertandingan): bool
+    {
+        if (! $pertandingan->lapangan_id || ! $pertandingan->waktu_mulai || ! $pertandingan->tanggal) {
+            throw new \RuntimeException('Pertandingan belum memiliki jadwal lengkap (lapangan, tanggal, atau waktu mulai).');
+        }
+
+        $pertandingan->update([
+            'status' => 'terjadwal',
+        ]);
+
+        return true;
+    }
+
     /**
      * Deteksi seluruh konflik pada satu tanggal tertentu (JDW-03)
      *
@@ -49,7 +200,7 @@ class PenjadwalanService
                         $venueNama = $lagaA->lapangan->venue->nama ?? 'Venue';
                         $konflikKeras[] = [
                             'tipe' => 'venue_dobel',
-                            'pesan' => "Bentrok Lapangan: [{$venueNama} - {$lapanganNama}] dijadwalkan bersamaan untuk Pertandingan #{$lagaA->id} ({$lagaA->nomorLomba->nama}) dan #{$lagaB->id} ({$lagaB->nomorLomba->nama}) pada jam {$lagaA->waktu_mulai} / {$lagaB->waktu_mulai}.",
+                            'pesan' => "Bentrok Lapangan: [{$venueNama} - {$lapanganNama}] dijadwalkan bersamaan untuk Pertandingan #{$lagaA->id} ({$lagaA->nomorLomba?->nama}) dan #{$lagaB->id} ({$lagaB->nomorLomba?->nama}) pada jam {$lagaA->waktu_mulai} / {$lagaB->waktu_mulai}.",
                             'pertandingan_ids' => [$lagaA->id, $lagaB->id],
                         ];
                     }
@@ -93,8 +244,8 @@ class PenjadwalanService
                         // Cek jeda minimum antar tanding -> Konflik Lunak (JDW-04)
                         $jedaMenit = $this->hitungJedaMenit($lagaA, $lagaB);
                         $minJeda = max(
-                            $lagaA->nomorLomba->cabangOlahraga->jeda_antar_tanding_menit ?? 30,
-                            $lagaB->nomorLomba->cabangOlahraga->jeda_antar_tanding_menit ?? 30
+                            $lagaA->nomorLomba?->cabangOlahraga?->jeda_antar_tanding_menit ?? 30,
+                            $lagaB->nomorLomba?->cabangOlahraga?->jeda_antar_tanding_menit ?? 30
                         );
 
                         if ($jedaMenit >= 0 && $jedaMenit < $minJeda) {
@@ -164,7 +315,7 @@ class PenjadwalanService
         string $waktuMulai,
         ?int $durasiMenit = null
     ): array {
-        $durasi = $durasiMenit ?? $pertandingan->durasi_menit ?? $pertandingan->nomorLomba->cabangOlahraga->durasi_default_menit ?? 60;
+        $durasi = $durasiMenit ?? $pertandingan->durasi_menit ?? $pertandingan->nomorLomba?->cabangOlahraga?->durasi_default_menit ?? 60;
 
         // Simpan sementara nilai asli
         $oldLapangan = $pertandingan->lapangan_id;
@@ -223,8 +374,8 @@ class PenjadwalanService
             return false;
         }
 
-        $durasiA = $a->durasi_menit ?? $a->nomorLomba->cabangOlahraga->durasi_default_menit ?? 60;
-        $durasiB = $b->durasi_menit ?? $b->nomorLomba->cabangOlahraga->durasi_default_menit ?? 60;
+        $durasiA = $a->durasi_menit ?? $a->nomorLomba?->cabangOlahraga?->durasi_default_menit ?? 60;
+        $durasiB = $b->durasi_menit ?? $b->nomorLomba?->cabangOlahraga?->durasi_default_menit ?? 60;
 
         $startA = Carbon::parse($a->waktu_mulai);
         $endA = (clone $startA)->addMinutes($durasiA);
@@ -240,8 +391,8 @@ class PenjadwalanService
      */
     protected function hitungJedaMenit(Pertandingan $a, Pertandingan $b): int
     {
-        $durasiA = $a->durasi_menit ?? $a->nomorLomba->cabangOlahraga->durasi_default_menit ?? 60;
-        $durasiB = $b->durasi_menit ?? $b->nomorLomba->cabangOlahraga->durasi_default_menit ?? 60;
+        $durasiA = $a->durasi_menit ?? $a->nomorLomba?->cabangOlahraga?->durasi_default_menit ?? 60;
+        $durasiB = $b->durasi_menit ?? $b->nomorLomba?->cabangOlahraga?->durasi_default_menit ?? 60;
 
         $startA = Carbon::parse($a->waktu_mulai);
         $endA = (clone $startA)->addMinutes($durasiA);
@@ -258,52 +409,5 @@ class PenjadwalanService
         }
 
         return -1; // Overlap
-    }
-
-    /**
-     * Ambil data Papan Jadwal terstruktur untuk dirender Alpine / Blade (JDW-01)
-     */
-    public function getPapanJadwal(string $tanggal, ?int $caborId = null, ?int $venueId = null): array
-    {
-        $venueQuery = Lapangan::with('venue');
-        if ($venueId) {
-            $venueQuery->where('venue_id', $venueId);
-        }
-        $lapanganList = $venueQuery->get();
-
-        $lagaQuery = Pertandingan::whereDate('tanggal', $tanggal)
-            ->whereNotNull('lapangan_id')
-            ->whereNotNull('waktu_mulai')
-            ->with([
-                'lapangan.venue',
-                'nomorLomba.cabangOlahraga',
-                'pesertaPertandingan.peserta',
-                'penugasanPanitia.panitia',
-            ]);
-
-        if ($caborId) {
-            $lagaQuery->whereHas('nomorLomba', fn ($q) => $q->where('cabang_olahraga_id', $caborId));
-        }
-
-        $pertandingans = $lagaQuery->get();
-        $konflikResult = $this->deteksiKonflik($tanggal);
-
-        // Slot waktu interval 30 menit (misal 08:00 sampai 20:00)
-        $slots = [];
-        $startTime = Carbon::parse('08:00');
-        $endTime = Carbon::parse('20:00');
-
-        while ($startTime->lte($endTime)) {
-            $slots[] = $startTime->format('H:i');
-            $startTime->addMinutes(30);
-        }
-
-        return [
-            'tanggal' => $tanggal,
-            'lapangan_list' => $lapanganList,
-            'slots' => $slots,
-            'pertandingans' => $pertandingans,
-            'konflik' => $konflikResult,
-        ];
     }
 }

@@ -25,23 +25,30 @@ class NomorLombaController extends Controller
     public function store(Request $request, CabangOlahraga $cabor)
     {
         $data = $request->validate([
-            'kode' => ['required', 'string', 'max:20'],
             'nama' => ['required', 'string', 'max:150'],
-            'jenis_kelamin' => ['required', Rule::in(['putra', 'putri', 'campuran'])],
-            'kelompok_umur' => ['nullable', 'string', 'max:50'],
-            'durasi_pertandingan_menit' => ['nullable', 'integer', 'min:1'],
-            'kuota_peserta' => ['nullable', 'integer', 'min:2'],
-            'jumlah_atlet_per_tim' => ['nullable', 'integer', 'min:1'],
-            'catatan_teknis' => ['nullable', 'string'],
+            'gender' => ['required', Rule::in(['putra', 'putri', 'campuran'])],
+            'jenis' => ['required', Rule::in(['perorangan', 'beregu'])],
+            'jumlah_anggota' => ['nullable', 'integer', 'min:1'],
+            'jumlah_cadangan' => ['nullable', 'integer', 'min:0'],
+            'umur_min' => ['nullable', 'integer', 'min:0'],
+            'umur_maks' => ['nullable', 'integer', 'min:0'],
+            'format_pertandingan' => ['required', Rule::in(['gugur_tunggal', 'round_robin', 'heat', 'penilaian'])],
+            'kuota_per_kontingen' => ['nullable', 'integer', 'min:1'],
+            'kapasitas_total' => ['nullable', 'integer', 'min:1'],
+            'jumlah_perunggu' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $data['cabang_olahraga_id'] = $cabor->id;
-        $data['status'] = 'aktif';
 
         NomorLomba::create($data);
 
         return redirect()->route('admin.cabor.show', $cabor)
             ->with('success', 'Nomor lomba berhasil ditambahkan.');
+    }
+
+    public function show(NomorLomba $nomorLomba)
+    {
+        return redirect()->route('admin.cabor.show', $nomorLomba->cabang_olahraga_id);
     }
 
     public function edit(NomorLomba $nomorLomba)
@@ -54,15 +61,17 @@ class NomorLombaController extends Controller
     public function update(Request $request, NomorLomba $nomorLomba)
     {
         $data = $request->validate([
-            'kode' => ['required', 'string', 'max:20'],
             'nama' => ['required', 'string', 'max:150'],
-            'jenis_kelamin' => ['required', Rule::in(['putra', 'putri', 'campuran'])],
-            'kelompok_umur' => ['nullable', 'string', 'max:50'],
-            'durasi_pertandingan_menit' => ['nullable', 'integer', 'min:1'],
-            'kuota_peserta' => ['nullable', 'integer', 'min:2'],
-            'jumlah_atlet_per_tim' => ['nullable', 'integer', 'min:1'],
-            'catatan_teknis' => ['nullable', 'string'],
-            'status' => ['required', Rule::in(['aktif', 'nonaktif'])],
+            'gender' => ['required', Rule::in(['putra', 'putri', 'campuran'])],
+            'jenis' => ['required', Rule::in(['perorangan', 'beregu'])],
+            'jumlah_anggota' => ['nullable', 'integer', 'min:1'],
+            'jumlah_cadangan' => ['nullable', 'integer', 'min:0'],
+            'umur_min' => ['nullable', 'integer', 'min:0'],
+            'umur_maks' => ['nullable', 'integer', 'min:0'],
+            'format_pertandingan' => ['required', Rule::in(['gugur_tunggal', 'round_robin', 'heat', 'penilaian'])],
+            'kuota_per_kontingen' => ['nullable', 'integer', 'min:1'],
+            'kapasitas_total' => ['nullable', 'integer', 'min:1'],
+            'jumlah_perunggu' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $nomorLomba->update($data);

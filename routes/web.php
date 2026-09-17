@@ -84,8 +84,11 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     Route::post('/papan-jadwal/{pertandingan}/tunda', [Admin\PapanJadwalController::class, 'tunda'])->name('papan-jadwal.tunda');
     Route::get('/papan-jadwal/export-pdf', [Admin\PapanJadwalController::class, 'exportPdf'])->name('papan-jadwal.export-pdf');
 
-    // Panitia
+    // Panitia & Akun PJ Cabor
     Route::resource('panitia', Admin\PanitiaController::class);
+    Route::post('panitia/{panitium}/buat-akun', [Admin\PanitiaController::class, 'buatAkun'])->name('panitia.buat-akun');
+    Route::post('panitia/{panitium}/reset-password', [Admin\PanitiaController::class, 'resetPasswordAkun'])->name('panitia.reset-password');
+    Route::delete('panitia/{panitium}/hapus-akun', [Admin\PanitiaController::class, 'hapusAkun'])->name('panitia.hapus-akun');
     Route::resource('penugasan', Admin\PenugasanPanitiaController::class)->only(['store', 'destroy']);
 
     // Rundown

@@ -5,9 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\CabangOlahraga;
 use App\Models\Event;
-use App\Models\User;
+use App\Models\Venue;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class CaborController extends Controller
 {
@@ -16,7 +15,7 @@ class CaborController extends Controller
         $event = Event::whereIn('status', ['pendaftaran_dibuka', 'berlangsung', 'pendaftaran_ditutup'])->latest()->first();
 
         $query = CabangOlahraga::withCount('nomorLomba')
-            ->with('pjUser')
+            ->with('venues')
             ->when($request->filled('q'), fn ($q) => $q->where('nama', 'like', '%'.$request->q.'%'));
 
         if ($event) {
@@ -31,24 +30,30 @@ class CaborController extends Controller
     public function create()
     {
         $event = Event::whereIn('status', ['pendaftaran_dibuka', 'berlangsung', 'pendaftaran_ditutup', 'draft'])->latest()->first();
-        $pjUsers = User::where('role', 'pj_cabor')->orderBy('name')->get();
+        $venues = Venue::when($event, fn ($q) => $q->where('event_id', $event->id))->orderBy('nama')->get();
 
-        return view('admin.cabor.create', compact('event', 'pjUsers'));
+        return view('admin.cabor.create', compact('event', 'venues'));
     }
 
     public function store(Request $request)
     {
         $data = $request->validate([
             'event_id' => ['required', 'exists:events,id'],
-            'kode' => ['required', 'string', 'max:10'],
             'nama' => ['required', 'string', 'max:150'],
-            'format_pertandingan' => ['required', Rule::in(['single_elimination', 'round_robin', 'heat', 'scoring'])],
-            'jenis' => ['required', Rule::in(['individu', 'tim'])],
+            'singkatan' => ['required', 'string', 'max:10'],
+            'warna' => ['nullable', 'string', 'max:7'],
             'deskripsi' => ['nullable', 'string'],
-            'pj_user_id' => ['nullable', 'exists:users,id'],
+            'durasi_default_menit' => ['nullable', 'integer', 'min:1'],
+            'jeda_antar_tanding_menit' => ['nullable', 'integer', 'min:0'],
         ]);
 
+        $venueIds = $request->input('venue_ids', []);
+
         $cabor = CabangOlahraga::create($data);
+
+        if (! empty($venueIds)) {
+            $cabor->venues()->attach($venueIds);
+        }
 
         return redirect()->route('admin.cabor.show', $cabor)
             ->with('success', 'Cabang olahraga berhasil ditambahkan.');
@@ -56,30 +61,35 @@ class CaborController extends Controller
 
     public function show(CabangOlahraga $cabor)
     {
-        $cabor->load(['nomorLomba', 'pjUser']);
+        $cabor->load(['nomorLomba', 'venues', 'event']);
 
         return view('admin.cabor.show', compact('cabor'));
     }
 
     public function edit(CabangOlahraga $cabor)
     {
-        $pjUsers = User::where('role', 'pj_cabor')->orderBy('name')->get();
+        $cabor->load('venues');
+        $event = $cabor->event;
+        $venues = Venue::when($event, fn ($q) => $q->where('event_id', $event->id))->orderBy('nama')->get();
 
-        return view('admin.cabor.edit', compact('cabor', 'pjUsers'));
+        return view('admin.cabor.edit', compact('cabor', 'venues'));
     }
 
     public function update(Request $request, CabangOlahraga $cabor)
     {
         $data = $request->validate([
-            'kode' => ['required', 'string', 'max:10'],
             'nama' => ['required', 'string', 'max:150'],
-            'format_pertandingan' => ['required', Rule::in(['single_elimination', 'round_robin', 'heat', 'scoring'])],
-            'jenis' => ['required', Rule::in(['individu', 'tim'])],
+            'singkatan' => ['required', 'string', 'max:10'],
+            'warna' => ['nullable', 'string', 'max:7'],
             'deskripsi' => ['nullable', 'string'],
-            'pj_user_id' => ['nullable', 'exists:users,id'],
+            'durasi_default_menit' => ['nullable', 'integer', 'min:1'],
+            'jeda_antar_tanding_menit' => ['nullable', 'integer', 'min:0'],
         ]);
 
         $cabor->update($data);
+
+        $venueIds = $request->input('venue_ids', []);
+        $cabor->venues()->sync($venueIds);
 
         return redirect()->route('admin.cabor.show', $cabor)
             ->with('success', 'Cabang olahraga berhasil diperbarui.');

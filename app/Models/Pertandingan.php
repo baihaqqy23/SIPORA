@@ -57,6 +57,11 @@ class Pertandingan extends Model
         return $this->hasMany(Pertandingan::class, 'parent_pertandingan_id');
     }
 
+    public function peserta(): HasMany
+    {
+        return $this->pesertaPertandingan();
+    }
+
     public function pesertaPertandingan(): HasMany
     {
         return $this->hasMany(PesertaPertandingan::class)->orderBy('slot');
@@ -85,5 +90,15 @@ class Pertandingan extends Model
     public function getPeserta2Attribute()
     {
         return $this->pesertaPertandingan->firstWhere('slot', 2);
+    }
+
+    public function getJamMulaiAttribute()
+    {
+        return $this->waktu_mulai;
+    }
+
+    public function setJamMulaiAttribute($value)
+    {
+        $this->attributes['waktu_mulai'] = $value;
     }
 }

@@ -32,7 +32,9 @@ class KlasemenMedaliService
         $cacheKey = "klasemen_medali_{$eventId}_{$caborId}";
 
         if ($useCache) {
-            return Cache::remember($cacheKey, 60, fn () => $this->kalkulasiKlasemen($eventId, $caborId));
+            $data = Cache::remember($cacheKey, 60, fn () => $this->kalkulasiKlasemen($eventId, $caborId)->toArray());
+
+            return collect($data);
         }
 
         return $this->kalkulasiKlasemen($eventId, $caborId);

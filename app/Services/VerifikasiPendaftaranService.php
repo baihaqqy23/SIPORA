@@ -2,8 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\AnggotaTim;
 use App\Models\Atlet;
 use App\Models\Event;
+use App\Models\Kontingen;
 use App\Models\NomorLomba;
 use App\Models\Pendaftaran;
 use App\Models\RiwayatVerifikasi;
@@ -221,6 +223,75 @@ class VerifikasiPendaftaranService
             ]);
 
             return $pendaftaran->fresh();
+        });
+    }
+
+    /**
+     * Daftarkan atlet atau tim ke nomor lomba
+     *
+     * @param  array<int>  $atletIds
+     * @return Pendaftaran|array<Pendaftaran>
+     */
+    public function daftarkan(
+        Kontingen $kontingen,
+        NomorLomba $nomorLomba,
+        array $atletIds,
+        ?string $namaTim = null
+    ) {
+        // Asumsi nomor lomba sudah me-load relasi cabangOlahraga->event
+        $event = $nomorLomba->cabangOlahraga->event;
+
+        return DB::transaction(function () use ($kontingen, $nomorLomba, $atletIds, $namaTim, $event) {
+            $pendaftarans = [];
+
+            if ($nomorLomba->jenis === 'perorangan') {
+                foreach ($atletIds as $atletId) {
+                    $atlet = Atlet::findOrFail($atletId);
+
+                    $validasi = $this->validasiOtomatis($event, $nomorLomba, $kontingen->id, $atlet, null);
+                    if (! $validasi['lolos']) {
+                        throw new \RuntimeException("Gagal mendaftarkan {$atlet->nama}: {$validasi['alasan']}");
+                    }
+
+                    $pendaftarans[] = Pendaftaran::create([
+                        'event_id' => $event->id,
+                        'kontingen_id' => $kontingen->id,
+                        'nomor_lomba_id' => $nomorLomba->id,
+                        'atlet_id' => $atletId,
+                        'status' => 'menunggu',
+                    ]);
+                }
+            } else {
+                // Beregu
+                $tim = TimKontingen::create([
+                    'kontingen_id' => $kontingen->id,
+                    'nomor_lomba_id' => $nomorLomba->id,
+                    'nama' => $namaTim ?: "Tim {$kontingen->nama}",
+                ]);
+
+                foreach ($atletIds as $atletId) {
+                    AnggotaTim::create([
+                        'tim_kontingen_id' => $tim->id,
+                        'atlet_id' => $atletId,
+                        'peran' => 'inti',
+                    ]);
+                }
+
+                $validasi = $this->validasiOtomatis($event, $nomorLomba, $kontingen->id, null, $tim);
+                if (! $validasi['lolos']) {
+                    throw new \RuntimeException("Gagal mendaftarkan tim: {$validasi['alasan']}");
+                }
+
+                $pendaftarans[] = Pendaftaran::create([
+                    'event_id' => $event->id,
+                    'kontingen_id' => $kontingen->id,
+                    'nomor_lomba_id' => $nomorLomba->id,
+                    'tim_kontingen_id' => $tim->id,
+                    'status' => 'menunggu',
+                ]);
+            }
+
+            return count($pendaftarans) === 1 ? $pendaftarans[0] : $pendaftarans;
         });
     }
 }

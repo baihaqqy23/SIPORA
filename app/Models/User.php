@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Collection;
 
 class User extends Authenticatable
 {
@@ -69,20 +70,22 @@ class User extends Authenticatable
     }
 
     /**
-     * Cabang olahraga yang ditugaskan ke PJ Cabor ini (lewat penugasan panitia)
+     * Cabang olahraga yang ditugaskan ke PJ Cabor ini (lewat penugasan panitia).
+     * Query langsung ke PenugasanPanitia agar tidak bergantung pada lazy-load relasi panitia.
      */
-    public function caborDitugaskan()
+    public function caborDitugaskan(): Collection
     {
         if (! $this->panitia_id) {
             return collect();
         }
 
-        return $this->panitia->penugasan()
+        return PenugasanPanitia::where('panitia_id', $this->panitia_id)
             ->whereNotNull('cabang_olahraga_id')
             ->with('cabangOlahraga')
             ->get()
             ->pluck('cabangOlahraga')
             ->filter()
-            ->unique('id');
+            ->unique('id')
+            ->values();
     }
 }

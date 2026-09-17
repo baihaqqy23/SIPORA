@@ -39,6 +39,11 @@ class Event extends Model
         ];
     }
 
+    public function getIsActiveAttribute(): bool
+    {
+        return in_array($this->status, ['berlangsung', 'pendaftaran_dibuka', 'pendaftaran_ditutup']);
+    }
+
     public function cabangOlahraga(): HasMany
     {
         return $this->hasMany(CabangOlahraga::class);

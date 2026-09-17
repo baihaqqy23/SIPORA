@@ -3,65 +3,86 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Event;
 use App\Models\Pengumuman;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 class PengumumanController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $pengumuman = Pengumuman::latest()->paginate(20);
+        $query = Pengumuman::with('event')->latest();
+
+        if ($request->filled('target') && $request->target !== 'semua') {
+            $query->where('target', $request->target);
+        }
+
+        if ($request->filled('q')) {
+            $query->where(function ($q) use ($request) {
+                $q->where('judul', 'like', '%'.$request->q.'%')
+                    ->orWhere('isi', 'like', '%'.$request->q.'%');
+            });
+        }
+
+        $pengumuman = $query->paginate(15)->withQueryString();
 
         return view('admin.pengumuman.index', compact('pengumuman'));
     }
 
     public function create()
     {
-        return view('admin.pengumuman.create');
+        $events = Event::orderBy('tanggal_mulai', 'desc')->get();
+
+        return view('admin.pengumuman.create', compact('events'));
     }
 
     public function store(Request $request)
     {
         $data = $request->validate([
+            'event_id' => ['required', 'exists:events,id'],
             'judul' => ['required', 'string', 'max:250'],
             'isi' => ['required', 'string'],
-            'tipe' => ['required', Rule::in(['informasi', 'peringatan', 'darurat'])],
-            'target_role' => ['required', Rule::in(['semua', 'kontingen', 'pj_cabor', 'panitia'])],
+            'target' => ['required', Rule::in(['semua', 'publik', 'kontingen', 'panitia'])],
             'tayang_mulai' => ['nullable', 'date'],
-            'tayang_selesai' => ['nullable', 'date', 'after_or_equal:tayang_mulai'],
-            'dipinkan' => ['boolean'],
+            'lampiran' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,doc,docx,zip', 'max:10240'],
         ]);
 
-        $data['dipinkan'] = $request->boolean('dipinkan');
-        $data['dibuat_oleh'] = auth()->id();
-        $data['status'] = $request->boolean('langsung_publikasi') ? 'dipublikasikan' : 'draft';
+        if ($request->hasFile('lampiran')) {
+            $data['lampiran_path'] = $request->file('lampiran')->store('pengumuman', 'public');
+        }
 
         Pengumuman::create($data);
 
         return redirect()->route('admin.pengumuman.index')
-            ->with('success', 'Pengumuman berhasil disimpan.');
+            ->with('success', 'Pengumuman berhasil diterbitkan.');
     }
 
     public function edit(Pengumuman $pengumuman)
     {
-        return view('admin.pengumuman.edit', compact('pengumuman'));
+        $events = Event::orderBy('tanggal_mulai', 'desc')->get();
+
+        return view('admin.pengumuman.edit', compact('pengumuman', 'events'));
     }
 
     public function update(Request $request, Pengumuman $pengumuman)
     {
         $data = $request->validate([
+            'event_id' => ['required', 'exists:events,id'],
             'judul' => ['required', 'string', 'max:250'],
             'isi' => ['required', 'string'],
-            'tipe' => ['required', Rule::in(['informasi', 'peringatan', 'darurat'])],
-            'target_role' => ['required', Rule::in(['semua', 'kontingen', 'pj_cabor', 'panitia'])],
+            'target' => ['required', Rule::in(['semua', 'publik', 'kontingen', 'panitia'])],
             'tayang_mulai' => ['nullable', 'date'],
-            'tayang_selesai' => ['nullable', 'date'],
-            'dipinkan' => ['boolean'],
-            'status' => ['required', Rule::in(['draft', 'dipublikasikan', 'diarsipkan'])],
+            'lampiran' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,doc,docx,zip', 'max:10240'],
         ]);
 
-        $data['dipinkan'] = $request->boolean('dipinkan');
+        if ($request->hasFile('lampiran')) {
+            if ($pengumuman->lampiran_path && Storage::disk('public')->exists($pengumuman->lampiran_path)) {
+                Storage::disk('public')->delete($pengumuman->lampiran_path);
+            }
+            $data['lampiran_path'] = $request->file('lampiran')->store('pengumuman', 'public');
+        }
 
         $pengumuman->update($data);
 
@@ -71,6 +92,10 @@ class PengumumanController extends Controller
 
     public function destroy(Pengumuman $pengumuman)
     {
+        if ($pengumuman->lampiran_path && Storage::disk('public')->exists($pengumuman->lampiran_path)) {
+            Storage::disk('public')->delete($pengumuman->lampiran_path);
+        }
+
         $pengumuman->delete();
 
         return redirect()->route('admin.pengumuman.index')

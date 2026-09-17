@@ -51,12 +51,40 @@ class DrawingService
     }
 
     /**
+     * Mengambil bracket yang sudah digenerate untuk sebuah nomor lomba
+     */
+    public function getBracket(NomorLomba $nomorLomba): array
+    {
+        $pertandingans = Pertandingan::where('nomor_lomba_id', $nomorLomba->id)
+            ->with([
+                'pesertaPertandingan.peserta',
+                'hasilPertandingan.pemenang',
+                'lapangan.venue',
+            ])
+            ->orderBy('urutan_bracket')
+            ->get();
+
+        $grouped = $pertandingans->groupBy('babak');
+
+        return [
+            'nomor_lomba' => $nomorLomba,
+            'format' => $nomorLomba->format_pertandingan,
+            'status' => $nomorLomba->status_bracket,
+            'total_pertandingan' => $pertandingans->count(),
+            'pertandingans' => $pertandingans,
+            'rounds' => $grouped,
+            'peserta_sah' => $this->getPesertaSah($nomorLomba),
+        ];
+    }
+
+    /**
      * Preview Drawing (BRK-08) sebelum disimpan permanen ke database
      *
-     * @param  array<int, int>  $seededIds  Optional ID peserta unggulan
+     * @param  array<int, int>|string  $seededIds
      */
-    public function previewDrawing(NomorLomba $nomorLomba, array $seededIds = [], int $jumlahGrup = 2, int $kapasitasLintasan = 8): array
+    public function previewDrawing(NomorLomba $nomorLomba, array|string $seededIds = [], int $jumlahGrup = 2, int $kapasitasLintasan = 8): array
     {
+        $seeds = is_array($seededIds) ? $seededIds : [];
         $peserta = $this->getPesertaSah($nomorLomba);
 
         if ($peserta->count() < 2 && $nomorLomba->format_pertandingan !== 'penilaian') {
@@ -64,15 +92,24 @@ class DrawingService
         }
 
         // Susun peserta dengan seeding dan proteksi kontingen (BRK-06)
-        $pesertaOrdered = $this->organisirPesertaSeedingDanProteksi($peserta, $seededIds);
+        $pesertaOrdered = $this->organisirPesertaSeedingDanProteksi($peserta, $seeds);
 
         return match ($nomorLomba->format_pertandingan) {
             'gugur_tunggal' => $this->bangunStrukturGugurTunggal($pesertaOrdered),
             'round_robin' => $this->bangunStrukturRoundRobin($pesertaOrdered, $jumlahGrup),
             'heat' => $this->bangunStrukturHeat($pesertaOrdered, $kapasitasLintasan),
             'penilaian' => $this->bangunStrukturPenilaian($pesertaOrdered),
-            default => throw new \InvalidArgumentException("Format pertandingan {$nomorLomba->format_pertandingan} belum didukung."),
+            default => $this->bangunStrukturGugurTunggal($pesertaOrdered),
         };
+    }
+
+    /**
+     * Langsung laksanakan drawing dan simpan ke database
+     */
+    public function laksanakanDrawing(NomorLomba $nomorLomba, array|string $seed = 'acak'): void
+    {
+        $preview = $this->previewDrawing($nomorLomba, is_array($seed) ? $seed : []);
+        $this->simpanDrawing($nomorLomba, $preview);
     }
 
     /**
@@ -82,7 +119,7 @@ class DrawingService
     {
         // Cegah reset/overwrite bila sudah ada hasil tersimpan (BRK-10)
         $hasResult = Pertandingan::where('nomor_lomba_id', $nomorLomba->id)
-            ->whereHas('hasil')
+            ->whereHas('hasilPertandingan')
             ->exists();
 
         if ($hasResult) {
@@ -97,7 +134,7 @@ class DrawingService
                 $p->delete();
             }
 
-            if ($nomorLomba->format_pertandingan === 'gugur_tunggal') {
+            if ($nomorLomba->format_pertandingan === 'gugur_tunggal' || empty($nomorLomba->format_pertandingan)) {
                 $this->persistGugurTunggal($nomorLomba, $previewData);
             } elseif ($nomorLomba->format_pertandingan === 'round_robin') {
                 $this->persistRoundRobin($nomorLomba, $previewData);
@@ -117,7 +154,7 @@ class DrawingService
     public function resetBracket(NomorLomba $nomorLomba): void
     {
         $hasResult = Pertandingan::where('nomor_lomba_id', $nomorLomba->id)
-            ->whereHas('hasil')
+            ->whereHas('hasilPertandingan')
             ->exists();
 
         if ($hasResult) {
@@ -480,7 +517,7 @@ class DrawingService
                 'peserta_type' => $p['type'],
                 'peserta_id' => $p['id'],
                 'slot' => $slot++,
-                'lintasan' => $p['urutan_tampil'], // Urutan tampil disimpan di lintasan / slot
+                'lintasan' => $p['urutan_tampil'],
             ]);
         }
     }
