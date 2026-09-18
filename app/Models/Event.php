@@ -13,6 +13,22 @@ class Event extends Model
 
     protected $table = 'events';
 
+    /**
+     * Daftar kategori usia yang tersedia beserta batas umur min dan maks.
+     *
+     * @return array<string, array{label: string, umur_min: int|null, umur_maks: int|null}>
+     */
+    public static function daftarKategoriUsia(): array
+    {
+        return [
+            'usia_muda' => ['label' => 'Usia Muda (< 17)', 'umur_min' => null, 'umur_maks' => 16],
+            'remaja' => ['label' => 'Remaja (17–21)',   'umur_min' => 17,   'umur_maks' => 21],
+            'junior' => ['label' => 'Junior (21–25)',   'umur_min' => 21,   'umur_maks' => 25],
+            'senior' => ['label' => 'Senior (25–35)',   'umur_min' => 25,   'umur_maks' => 35],
+            'master' => ['label' => 'Master (35+)',     'umur_min' => 35,   'umur_maks' => null],
+        ];
+    }
+
     protected $fillable = [
         'nama',
         'slug',
@@ -20,7 +36,7 @@ class Event extends Model
         'logo_path',
         'tanggal_mulai',
         'tanggal_selesai',
-        'tanggal_patokan_umur',
+        'kategori_usia',
         'pendaftaran_mulai',
         'pendaftaran_selesai',
         'maks_nomor_lomba_per_atlet',
@@ -32,11 +48,34 @@ class Event extends Model
         return [
             'tanggal_mulai' => 'date',
             'tanggal_selesai' => 'date',
-            'tanggal_patokan_umur' => 'date',
             'pendaftaran_mulai' => 'datetime',
             'pendaftaran_selesai' => 'datetime',
             'maks_nomor_lomba_per_atlet' => 'integer',
         ];
+    }
+
+    /**
+     * Ambil label tampilan dari kategori_usia.
+     */
+    public function getLabelKategoriUsiaAttribute(): string
+    {
+        return static::daftarKategoriUsia()[$this->kategori_usia]['label'] ?? $this->kategori_usia;
+    }
+
+    /**
+     * Batas umur minimum dari kategori_usia.
+     */
+    public function getUmurMinKategoriAttribute(): ?int
+    {
+        return static::daftarKategoriUsia()[$this->kategori_usia]['umur_min'] ?? null;
+    }
+
+    /**
+     * Batas umur maksimum dari kategori_usia.
+     */
+    public function getUmurMaksKategoriAttribute(): ?int
+    {
+        return static::daftarKategoriUsia()[$this->kategori_usia]['umur_maks'] ?? null;
     }
 
     public function getIsActiveAttribute(): bool

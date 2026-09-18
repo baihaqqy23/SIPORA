@@ -56,7 +56,7 @@
                                 <div class="font-medium text-neutral-800">
                                     {{ $event->tanggal_mulai ? $event->tanggal_mulai->format('d M Y') : '-' }} s/d {{ $event->tanggal_selesai ? $event->tanggal_selesai->format('d M Y') : '-' }}
                                 </div>
-                                <div class="text-[11px] text-neutral-400">Patokan Umur: {{ $event->tanggal_patokan_umur ? $event->tanggal_patokan_umur->format('d/m/Y') : '-' }}</div>
+                                <div class="text-[11px] text-neutral-400">Usia: {{ $event->label_kategori_usia ?? '-' }}</div>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-xs text-neutral-600">
                                 <div>{{ $event->pendaftaran_mulai ? $event->pendaftaran_mulai->format('d/m/Y H:i') : '-' }}</div>

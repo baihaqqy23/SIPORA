@@ -103,16 +103,19 @@ class VerifikasiPendaftaranService
                 $alasanList[] = "Gender atlet ({$atlet->gender}) tidak cocok dengan kategori nomor lomba ({$genderLabel}).";
             }
 
-            // REG-02: Cek Umur terhadap event.tanggal_patokan_umur
-            $umur = $atlet->hitungUmurPada($event->tanggal_patokan_umur);
+            // REG-02: Cek Umur berdasarkan kategori_usia event
+            $tanggalAcuan = $event->tanggal_mulai ?? now()->toDateObject();
+            $umur = $atlet->hitungUmurPada($tanggalAcuan);
             $umurValid = true;
-            if ($nomorLomba->umur_min && $umur < $nomorLomba->umur_min) {
+            $umurMin = $event->umur_min_kategori;
+            $umurMaks = $event->umur_maks_kategori;
+            if ($umurMin !== null && $umur < $umurMin) {
                 $umurValid = false;
-                $alasanList[] = "Umur atlet ({$umur} tahun) kurang dari batas minimum ({$nomorLomba->umur_min} tahun) pada tanggal patokan {$event->tanggal_patokan_umur->format('d/m/Y')}.";
+                $alasanList[] = "Umur atlet ({$umur} tahun) kurang dari batas minimum kategori {$event->label_kategori_usia} ({$umurMin} tahun).";
             }
-            if ($nomorLomba->umur_maks && $umur > $nomorLomba->umur_maks) {
+            if ($umurMaks !== null && $umur > $umurMaks) {
                 $umurValid = false;
-                $alasanList[] = "Umur atlet ({$umur} tahun) melebihi batas maksimum ({$nomorLomba->umur_maks} tahun) pada tanggal patokan {$event->tanggal_patokan_umur->format('d/m/Y')}.";
+                $alasanList[] = "Umur atlet ({$umur} tahun) melebihi batas maksimum kategori {$event->label_kategori_usia} ({$umurMaks} tahun).";
             }
             $detail['kesesuaian_umur'] = $umurValid;
 

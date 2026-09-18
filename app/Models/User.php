@@ -70,19 +70,63 @@ class User extends Authenticatable
     }
 
     /**
-     * Cabang olahraga yang ditugaskan ke PJ Cabor ini (lewat penugasan panitia).
-     * Query langsung ke PenugasanPanitia agar tidak bergantung pada lazy-load relasi panitia.
+     * Event yang ditugaskan ke PJ Cabor ini (atau semua event jika Admin).
      */
-    public function caborDitugaskan(): Collection
+    public function eventsDitugaskan(): Collection
     {
-        if (! $this->panitia_id) {
+        if ($this->isAdmin()) {
+            return Event::orderBy('nama')->get();
+        }
+
+        $panitiaIds = Panitia::where('user_id', $this->id)
+            ->when($this->panitia_id, fn ($q) => $q->orWhere('id', $this->panitia_id))
+            ->pluck('id');
+
+        if ($panitiaIds->isEmpty()) {
             return collect();
         }
 
-        return PenugasanPanitia::where('panitia_id', $this->panitia_id)
+        $caborIds = PenugasanPanitia::whereIn('panitia_id', $panitiaIds)
             ->whereNotNull('cabang_olahraga_id')
-            ->with('cabangOlahraga')
-            ->get()
+            ->pluck('cabang_olahraga_id');
+
+        $eventIdsFromCabor = CabangOlahraga::whereIn('id', $caborIds)->pluck('event_id');
+        $eventIdsFromPanitia = Panitia::whereIn('id', $panitiaIds)->pluck('event_id');
+        $allEventIds = $eventIdsFromCabor->concat($eventIdsFromPanitia)->filter()->unique();
+
+        return Event::whereIn('id', $allEventIds)->orderBy('nama')->get();
+    }
+
+    /**
+     * Cabang olahraga yang ditugaskan ke PJ Cabor ini (lewat penugasan panitia).
+     * Dapat difilter berdasarkan $eventId spesifik.
+     */
+    public function caborDitugaskan(?int $eventId = null): Collection
+    {
+        if ($this->isAdmin()) {
+            return CabangOlahraga::with('event')
+                ->when($eventId, fn ($q) => $q->where('event_id', $eventId))
+                ->orderBy('nama')
+                ->get();
+        }
+
+        $panitiaIds = Panitia::where('user_id', $this->id)
+            ->when($this->panitia_id, fn ($q) => $q->orWhere('id', $this->panitia_id))
+            ->pluck('id');
+
+        if ($panitiaIds->isEmpty()) {
+            return collect();
+        }
+
+        $query = PenugasanPanitia::whereIn('panitia_id', $panitiaIds)
+            ->whereNotNull('cabang_olahraga_id')
+            ->with(['cabangOlahraga.event']);
+
+        if ($eventId) {
+            $query->whereHas('cabangOlahraga', fn ($q) => $q->where('event_id', $eventId));
+        }
+
+        return $query->get()
             ->pluck('cabangOlahraga')
             ->filter()
             ->unique('id')

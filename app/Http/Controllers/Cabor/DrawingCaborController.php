@@ -14,9 +14,18 @@ class DrawingCaborController extends Controller
 
     public function show(NomorLomba $nomorLomba)
     {
-        $nomorLomba->load(['cabangOlahraga', 'pendaftaran' => function ($q) {
+        $nomorLomba->load(['cabangOlahraga.event', 'pendaftaran' => function ($q) {
             $q->where('status', 'disetujui')->with(['atlet.kontingen', 'timKontingen.kontingen']);
         }]);
+
+        if ($nomorLomba->cabangOlahraga) {
+            session([
+                'pj_cabor_active_event_id' => $nomorLomba->cabangOlahraga->event_id,
+                'pj_cabor_active_cabor_id' => $nomorLomba->cabang_olahraga_id,
+            ]);
+            view()->share('currentEvent', $nomorLomba->cabangOlahraga->event);
+            view()->share('currentCabor', $nomorLomba->cabangOlahraga);
+        }
 
         $pertandingan = Pertandingan::with(['peserta.peserta', 'lapangan'])
             ->where('nomor_lomba_id', $nomorLomba->id)

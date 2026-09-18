@@ -12,6 +12,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class PanitiaController extends Controller
@@ -51,7 +52,7 @@ class PanitiaController extends Controller
 
     public function create(): View
     {
-        $events = Event::orderBy('nama')->get();
+        $events = Event::with(['cabangOlahraga' => fn ($q) => $q->orderBy('nama')])->orderBy('nama')->get();
         $activeEvent = Event::whereIn('status', ['berlangsung', 'pendaftaran_dibuka'])->first() ?? $events->first();
         $caborList = CabangOlahraga::orderBy('nama')->get();
 
@@ -69,11 +70,14 @@ class PanitiaController extends Controller
             'email' => ['nullable', 'email', 'max:150'],
             'foto' => ['nullable', 'image', 'max:2048'],
             'create_user' => ['nullable', 'boolean'],
-            'user_email' => ['nullable', 'required_if:create_user,1', 'email', 'max:150', 'unique:users,email'],
+            'user_email' => ['nullable', 'required_if:create_user,1', 'email', 'max:150'],
             'password' => ['nullable', 'required_if:create_user,1', 'string', 'min:8', 'confirmed'],
             'role' => ['nullable', 'in:admin,pj_cabor'],
             'harus_ganti_password' => ['nullable', 'boolean'],
-            'penugasan_cabor_id' => ['required', 'exists:cabang_olahraga,id'],
+            'penugasan_cabor_id' => [
+                'required',
+                Rule::exists('cabang_olahraga', 'id')->where(fn ($q) => $q->where('event_id', $request->event_id)),
+            ],
         ]);
 
         if ($request->hasFile('foto')) {
@@ -82,29 +86,41 @@ class PanitiaController extends Controller
 
         $panitia = Panitia::create($validated);
 
-        // Optionally create user account for panitia / PJ cabor
-        if ($request->boolean('create_user') && $request->filled('user_email') && $request->filled('password')) {
+        // Optionally create or link user account for panitia / PJ cabor
+        if ($request->boolean('create_user') && $request->filled('user_email')) {
             $userRole = $request->get('role', 'pj_cabor');
-            $user = User::create([
-                'name' => $panitia->nama,
-                'email' => $request->user_email,
-                'password' => Hash::make($request->password),
-                'role' => $userRole,
-                'panitia_id' => $panitia->id,
-                'status' => 'aktif',
-                'harus_ganti_password' => $request->boolean('harus_ganti_password'),
-            ]);
+            $existingUser = User::where('email', $request->user_email)->first();
 
-            $panitia->update([
-                'user_id' => $user->id,
-                'email' => $panitia->email ?: $request->user_email,
-            ]);
+            if ($existingUser) {
+                $existingUser->update([
+                    'panitia_id' => $existingUser->panitia_id ?: $panitia->id,
+                ]);
+                $panitia->update([
+                    'user_id' => $existingUser->id,
+                    'email' => $panitia->email ?: $existingUser->email,
+                ]);
+            } elseif ($request->filled('password')) {
+                $user = User::create([
+                    'name' => $panitia->nama,
+                    'email' => $request->user_email,
+                    'password' => Hash::make($request->password),
+                    'role' => $userRole,
+                    'panitia_id' => $panitia->id,
+                    'status' => 'aktif',
+                    'harus_ganti_password' => $request->boolean('harus_ganti_password'),
+                ]);
+
+                $panitia->update([
+                    'user_id' => $user->id,
+                    'email' => $panitia->email ?: $request->user_email,
+                ]);
+            }
         }
 
         // Create assignment to the selected cabor
         $panitia->penugasan()->create([
             'cabang_olahraga_id' => $validated['penugasan_cabor_id'],
-            'peran' => null,
+            'peran' => 'pj_cabor',
         ]);
 
         return redirect()->route('admin.panitia.show', $panitia)
@@ -198,7 +214,7 @@ class PanitiaController extends Controller
 
     public function edit(Panitia $panitium): View
     {
-        $events = Event::orderBy('nama')->get();
+        $events = Event::with(['cabangOlahraga' => fn ($q) => $q->orderBy('nama')])->orderBy('nama')->get();
         $caborList = CabangOlahraga::orderBy('nama')->get();
         $penugasan = $panitium->penugasan()->first();
 
@@ -220,7 +236,10 @@ class PanitiaController extends Controller
             'no_hp' => ['required', 'string', 'max:20'],
             'email' => ['nullable', 'email', 'max:150'],
             'foto' => ['nullable', 'image', 'max:2048'],
-            'penugasan_cabor_id' => ['required', 'exists:cabang_olahraga,id'],
+            'penugasan_cabor_id' => [
+                'required',
+                Rule::exists('cabang_olahraga', 'id')->where(fn ($q) => $q->where('event_id', $request->event_id)),
+            ],
         ]);
 
         if ($request->hasFile('foto')) {
@@ -235,9 +254,15 @@ class PanitiaController extends Controller
         // Sync single cabor affiliation: update or create the one penugasan record
         $penugasan = $panitium->penugasan()->first();
         if ($penugasan) {
-            $penugasan->update(['cabang_olahraga_id' => $validated['penugasan_cabor_id']]);
+            $penugasan->update([
+                'cabang_olahraga_id' => $validated['penugasan_cabor_id'],
+                'peran' => 'pj_cabor',
+            ]);
         } else {
-            $panitium->penugasan()->create(['cabang_olahraga_id' => $validated['penugasan_cabor_id']]);
+            $panitium->penugasan()->create([
+                'cabang_olahraga_id' => $validated['penugasan_cabor_id'],
+                'peran' => 'pj_cabor',
+            ]);
         }
 
         return redirect()->route('admin.panitia.show', $panitium)

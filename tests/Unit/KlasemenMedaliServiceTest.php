@@ -30,7 +30,7 @@ class KlasemenMedaliServiceTest extends TestCase
             'slug' => 'popnas-klasemen',
             'tanggal_mulai' => now()->addDays(10),
             'tanggal_selesai' => now()->addDays(20),
-            'tanggal_patokan_umur' => now()->addDays(10),
+            'kategori_usia' => 'senior',
             'pendaftaran_mulai' => now()->subDays(5),
             'pendaftaran_selesai' => now()->addDays(5),
             'status' => 'berlangsung',

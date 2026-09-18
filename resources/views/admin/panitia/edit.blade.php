@@ -13,7 +13,11 @@
 @endsection
 
 @section('content')
-<div class="max-w-3xl">
+<div class="max-w-3xl" x-data="panitiaForm({
+    events: {{ \Illuminate\Support\Js::from($events->map(fn($e) => ['id' => $e->id, 'nama' => $e->nama, 'cabang_olahraga' => $e->cabangOlahraga->map(fn($c) => ['id' => $c->id, 'nama' => $c->nama])])) }},
+    selectedEventId: '{{ old('event_id', $panitia->event_id) }}',
+    selectedCaborId: '{{ old('penugasan_cabor_id', $penugasan?->cabang_olahraga_id) }}'
+})">
     <div class="mb-6 flex items-center gap-3">
         <a href="{{ route('admin.panitia.show', $panitia) }}"
            class="p-1.5 text-neutral-400 hover:text-neutral-700 rounded-lg hover:bg-neutral-100 transition-colors">
@@ -37,7 +41,7 @@
                 <label for="event_id" class="block text-xs font-semibold text-neutral-700 uppercase tracking-wider mb-1.5">
                     Event <span class="text-red-500">*</span>
                 </label>
-                <select id="event_id" name="event_id" required
+                <select id="event_id" name="event_id" required x-model="selectedEventId" @change="onEventChange()"
                         class="w-full text-sm border border-neutral-300 rounded-lg px-3 py-2.5 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition @error('event_id') border-red-500 @enderror">
                     <option value="">Pilih Event...</option>
                     @foreach($events as $event)
@@ -97,20 +101,22 @@
                 </div>
             </div>
 
-            {{-- Cabang Olahraga --}}
+            {{-- Cabang Olahraga (Cascading sesuai Event) --}}
             <div>
                 <label for="penugasan_cabor_id" class="block text-xs font-semibold text-neutral-700 uppercase tracking-wider mb-1.5">
                     Cabang Olahraga <span class="text-red-500">*</span>
                 </label>
-                <select id="penugasan_cabor_id" name="penugasan_cabor_id" required
-                        class="w-full text-sm border border-neutral-300 rounded-lg px-3 py-2.5 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition @error('penugasan_cabor_id') border-red-500 @enderror">
-                    <option value="">-- Pilih Cabang Olahraga --</option>
-                    @foreach($caborList as $cabor)
-                        <option value="{{ $cabor->id }}" {{ old('penugasan_cabor_id', $penugasan?->cabang_olahraga_id) == $cabor->id ? 'selected' : '' }}>
-                            {{ $cabor->nama }}
-                        </option>
-                    @endforeach
+                <select id="penugasan_cabor_id" name="penugasan_cabor_id" required x-model="selectedCaborId"
+                        :disabled="!selectedEventId"
+                        class="w-full text-sm border border-neutral-300 rounded-lg px-3 py-2.5 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition disabled:bg-neutral-100 disabled:text-neutral-400 @error('penugasan_cabor_id') border-red-500 @enderror">
+                    <option value="" x-text="selectedEventId ? '-- Pilih Cabang Olahraga --' : '-- Pilih Event Terlebih Dahulu --'">-- Pilih Cabang Olahraga --</option>
+                    <template x-for="cabor in availableCabors" :key="cabor.id">
+                        <option :value="cabor.id" x-text="cabor.nama" :selected="cabor.id == selectedCaborId"></option>
+                    </template>
                 </select>
+                <p x-show="selectedEventId && availableCabors.length === 0" class="text-xs text-amber-600 mt-1" x-cloak>
+                    Peringatan: Belum ada cabang olahraga yang didaftarkan pada event ini.
+                </p>
                 @error('penugasan_cabor_id')
                     <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
                 @enderror
@@ -183,6 +189,25 @@
 
 @push('scripts')
 <script>
+    function panitiaForm(config) {
+        return {
+            events: config.events || [],
+            selectedEventId: config.selectedEventId || '',
+            selectedCaborId: config.selectedCaborId || '',
+            get availableCabors() {
+                if (!this.selectedEventId) return [];
+                const ev = this.events.find(e => String(e.id) === String(this.selectedEventId));
+                return ev ? ev.cabang_olahraga : [];
+            },
+            onEventChange() {
+                const exists = this.availableCabors.some(c => String(c.id) === String(this.selectedCaborId));
+                if (!exists) {
+                    this.selectedCaborId = '';
+                }
+            }
+        };
+    }
+
     function jabatanCombobox(initial) {
         const presets = [
             'Ketua Pelaksana','Sekretaris Pelaksana','Koordinator Pertandingan',

@@ -30,16 +30,55 @@
                 </div>
             </a>
 
-            {{-- Cabor Badge --}}
+            {{-- Context Switcher: Event & Cabor --}}
             @php
-                $assignedCabor = auth()->user()->caborDitugaskan();
-                $firstCabor = $assignedCabor->first();
+                $assignedEvents = $assignedEvents ?? auth()->user()->eventsDitugaskan();
+                $currentEvent = $currentEvent ?? $assignedEvents->first();
+                $assignedCabors = $assignedCabors ?? auth()->user()->caborDitugaskan($currentEvent?->id);
+                $currentCabor = $currentCabor ?? $assignedCabors->first();
             @endphp
-            @if($firstCabor)
+
+            @if($currentEvent || $currentCabor)
                 <div class="hidden md:flex items-center gap-2 pl-3 border-l border-slate-200 dark:border-slate-800 text-xs">
-                    <span class="inline-flex items-center px-2.5 py-1 rounded-lg font-semibold text-white shadow-xs" style="background-color: {{ $firstCabor->warna ?? '#2563EB' }}">
-                        {{ $firstCabor->nama }} ({{ $firstCabor->singkatan }})
-                    </span>
+                    {{-- Event Dropdown / Label --}}
+                    <div class="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1 rounded-lg">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Event:</span>
+                        @if($assignedEvents->count() > 1)
+                            <select onchange="switchCaborEvent(this.value)" class="text-xs font-semibold bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer border-0 p-0 pr-2">
+                                @foreach($assignedEvents as $ev)
+                                    <option value="{{ $ev->id }}" {{ $currentEvent?->id == $ev->id ? 'selected' : '' }} class="bg-white dark:bg-slate-800 text-slate-800 dark:text-white">
+                                        {{ $ev->nama }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        @else
+                            <span class="font-semibold text-slate-700 dark:text-slate-200">{{ $currentEvent?->nama ?? 'Semua Event' }}</span>
+                        @endif
+                    </div>
+
+                    <span class="text-slate-300 dark:text-slate-700 font-bold">&rsaquo;</span>
+
+                    {{-- Cabor Dropdown / Badge --}}
+                    @if($currentCabor)
+                        <div class="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1 rounded-lg">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Cabor:</span>
+                            @if($assignedCabors->count() > 1)
+                                <select onchange="switchCabor(this.value)" class="text-xs font-semibold bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer border-0 p-0 pr-2">
+                                    @foreach($assignedCabors as $ac)
+                                        <option value="{{ $ac->id }}" {{ $currentCabor->id == $ac->id ? 'selected' : '' }} class="bg-white dark:bg-slate-800 text-slate-800 dark:text-white">
+                                            {{ $ac->nama }} ({{ $ac->singkatan }})
+                                        </option>
+                                    @endforeach
+                                </select>
+                            @else
+                                <span class="inline-flex items-center gap-1 font-semibold text-white px-2 py-0.5 rounded text-[11px]" style="background-color: {{ $currentCabor->warna ?? '#2563EB' }}">
+                                    {{ $currentCabor->nama }}
+                                </span>
+                            @endif
+                        </div>
+                    @else
+                        <span class="text-[11px] text-amber-600 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded">Belum ada cabor di event ini</span>
+                    @endif
                 </div>
             @endif
         </div>
@@ -108,12 +147,60 @@
             </div>
         </div>
     </div>
+
+    {{-- Mobile Context Selector Bar --}}
+    @if($currentEvent || $currentCabor)
+        <div class="md:hidden border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div class="flex items-center gap-1.5">
+                <span class="text-[10px] uppercase font-bold text-slate-400">Event:</span>
+                @if($assignedEvents->count() > 1)
+                    <select onchange="switchCaborEvent(this.value)" class="text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 py-1 px-2 text-slate-800 dark:text-slate-200">
+                        @foreach($assignedEvents as $ev)
+                            <option value="{{ $ev->id }}" {{ $currentEvent?->id == $ev->id ? 'selected' : '' }}>{{ $ev->nama }}</option>
+                        @endforeach
+                    </select>
+                @else
+                    <span class="font-semibold text-slate-700 dark:text-slate-200">{{ $currentEvent?->nama ?? 'Semua Event' }}</span>
+                @endif
+            </div>
+
+            @if($currentCabor)
+                <div class="flex items-center gap-1.5">
+                    <span class="text-[10px] uppercase font-bold text-slate-400">Cabor:</span>
+                    @if($assignedCabors->count() > 1)
+                        <select onchange="switchCabor(this.value)" class="text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 py-1 px-2 text-slate-800 dark:text-slate-200">
+                            @foreach($assignedCabors as $ac)
+                                <option value="{{ $ac->id }}" {{ $currentCabor->id == $ac->id ? 'selected' : '' }}>{{ $ac->nama }}</option>
+                            @endforeach
+                        </select>
+                    @else
+                        <span class="font-semibold text-white px-2 py-0.5 rounded text-[11px]" style="background-color: {{ $currentCabor->warna ?? '#2563EB' }}">{{ $currentCabor->nama }}</span>
+                    @endif
+                </div>
+            @endif
+        </div>
+    @endif
 </header>
 
 {{-- Main Body --}}
 <main class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
     @yield('content')
 </main>
+
+<script>
+    function switchCaborEvent(eventId) {
+        var url = new URL(window.location.href);
+        url.searchParams.set('event_id', eventId);
+        url.searchParams.delete('cabor_id');
+        window.location.href = url.toString();
+    }
+
+    function switchCabor(caborId) {
+        var url = new URL(window.location.href);
+        url.searchParams.set('cabor_id', caborId);
+        window.location.href = url.toString();
+    }
+</script>
 
 @stack('scripts')
 </body>

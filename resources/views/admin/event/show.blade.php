@@ -108,8 +108,8 @@
                     </span>
                 </div>
                 <div>
-                    <span class="text-neutral-400 text-xs block">Tanggal Patokan Usia Atlet:</span>
-                    <span class="text-neutral-800 font-medium">{{ $event->tanggal_patokan_umur ? $event->tanggal_patokan_umur->translatedFormat('d F Y') : '-' }}</span>
+                    <span class="text-neutral-400 text-xs block">Kategori Usia Atlet:</span>
+                    <span class="text-neutral-800 font-medium">{{ $event->label_kategori_usia ?? '-' }}</span>
                 </div>
                 <div>
                     <span class="text-neutral-400 text-xs block">Maksimal Nomor Lomba per Atlet:</span>

@@ -2,8 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\CabangOlahraga;
+use App\Models\Event;
 use App\Models\NomorLomba;
+use App\Models\Panitia;
 use App\Models\Pendaftaran;
+use App\Models\PenugasanPanitia;
 use App\Models\Pertandingan;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
@@ -79,5 +83,56 @@ class PjCaborIntegrationTest extends TestCase
     {
         $nomorLomba = NomorLomba::first();
         $this->actingAs($this->pjUser)->get(route('cabor.bracket.show', $nomorLomba))->assertStatus(200);
+    }
+
+    public function test_pj_cabor_context_switching_event_and_cabor(): void
+    {
+        $event2 = Event::create([
+            'nama' => 'PORDA 2026',
+            'slug' => 'porda-2026-test',
+            'tanggal_mulai' => now()->addDays(30),
+            'tanggal_selesai' => now()->addDays(40),
+            'kategori_usia' => 'senior',
+            'pendaftaran_mulai' => now()->subDays(5),
+            'pendaftaran_selesai' => now()->addDays(15),
+            'status' => 'pendaftaran_dibuka',
+        ]);
+
+        $cabor2 = CabangOlahraga::create([
+            'event_id' => $event2->id,
+            'nama' => 'Karate',
+            'singkatan' => 'KRT',
+            'warna' => '#0284C7',
+        ]);
+
+        $panitia2 = Panitia::create([
+            'event_id' => $event2->id,
+            'user_id' => $this->pjUser->id,
+            'nama' => $this->pjUser->name,
+            'jabatan' => 'PJ Karate',
+            'no_hp' => '081234567899',
+        ]);
+
+        PenugasanPanitia::create([
+            'panitia_id' => $panitia2->id,
+            'cabang_olahraga_id' => $cabor2->id,
+            'peran' => 'pj_cabor',
+        ]);
+
+        // Verify eventsDitugaskan
+        $events = $this->pjUser->eventsDitugaskan();
+        $this->assertGreaterThanOrEqual(2, $events->count());
+
+        // Test dashboard with event_id & cabor_id query params
+        $response = $this->actingAs($this->pjUser)->get(route('cabor.dashboard', [
+            'event_id' => $event2->id,
+            'cabor_id' => $cabor2->id,
+        ]));
+
+        $response->assertStatus(200);
+        $response->assertSee('PORDA 2026');
+        $response->assertSee('Karate');
+        $this->assertEquals($event2->id, session('pj_cabor_active_event_id'));
+        $this->assertEquals($cabor2->id, session('pj_cabor_active_cabor_id'));
     }
 }

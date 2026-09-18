@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers\Cabor;
 
+use App\Http\Controllers\Cabor\Concerns\HasCaborContext;
 use App\Http\Controllers\Controller;
-use App\Models\CabangOlahraga;
 use App\Models\Lapangan;
 use App\Models\Pertandingan;
 use App\Services\PenjadwalanService;
@@ -11,22 +11,20 @@ use Illuminate\Http\Request;
 
 class JadwalCaborController extends Controller
 {
+    use HasCaborContext;
+
     public function __construct(protected PenjadwalanService $penjadwalanService) {}
 
     public function index(Request $request)
     {
-        $user = auth()->user();
-        $assignedCabor = $user->caborDitugaskan();
-
-        if ($user->isAdmin() && $assignedCabor->isEmpty()) {
-            $assignedCabor = CabangOlahraga::all();
-        }
-
-        $caborId = $request->get('cabor_id', $assignedCabor->first()?->id);
-        $cabor = CabangOlahraga::with(['nomorLomba', 'venues.lapangan'])->find($caborId) ?? $assignedCabor->first();
+        $context = $this->resolveCaborContext($request);
+        $cabor = $context['currentCabor'];
+        $event = $context['currentEvent'];
+        $assignedCabor = $context['assignedCabors'];
+        $assignedEvents = $context['assignedEvents'];
 
         if (! $cabor) {
-            return view('cabor.no-cabor');
+            return view('cabor.no-cabor', compact('assignedEvents', 'event'));
         }
 
         $nomorLombaIds = $cabor->nomorLomba->pluck('id');
@@ -53,7 +51,7 @@ class JadwalCaborController extends Controller
 
         $lapangans = Lapangan::whereIn('venue_id', $cabor->venues->pluck('id'))->get();
 
-        return view('cabor.jadwal.index', compact('cabor', 'assignedCabor', 'pertandingan', 'lapangans'));
+        return view('cabor.jadwal.index', compact('cabor', 'event', 'assignedCabor', 'assignedEvents', 'pertandingan', 'lapangans'));
     }
 
     public function pindah(Request $request)

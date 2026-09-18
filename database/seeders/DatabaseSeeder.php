@@ -47,7 +47,7 @@ class DatabaseSeeder extends Seeder
             'deskripsi' => 'Pesta olahraga akbar antar kota/kabupaten se-provinsi mempertandingkan cabang olahraga resmi berstandar nasional.',
             'tanggal_mulai' => Carbon::today()->subDays(2)->format('Y-m-d'),
             'tanggal_selesai' => Carbon::today()->addDays(8)->format('Y-m-d'),
-            'tanggal_patokan_umur' => Carbon::today()->format('Y-m-d'),
+            'kategori_usia' => 'senior',
             'pendaftaran_mulai' => Carbon::today()->subDays(30)->setTime(0, 0),
             'pendaftaran_selesai' => Carbon::today()->subDays(5)->setTime(23, 59),
             'maks_nomor_lomba_per_atlet' => 3,

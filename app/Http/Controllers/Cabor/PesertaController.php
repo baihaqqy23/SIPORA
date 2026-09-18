@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers\Cabor;
 
+use App\Http\Controllers\Cabor\Concerns\HasCaborContext;
 use App\Http\Controllers\Controller;
-use App\Models\CabangOlahraga;
 use App\Models\Notifikasi;
 use App\Models\Pendaftaran;
 use Illuminate\Http\Request;
@@ -11,20 +11,18 @@ use Illuminate\Validation\Rule;
 
 class PesertaController extends Controller
 {
+    use HasCaborContext;
+
     public function index(Request $request)
     {
-        $user = auth()->user();
-        $assignedCabor = $user->caborDitugaskan();
-
-        if ($user->isAdmin() && $assignedCabor->isEmpty()) {
-            $assignedCabor = CabangOlahraga::all();
-        }
-
-        $caborId = $request->get('cabor_id', $assignedCabor->first()?->id);
-        $cabor = CabangOlahraga::with('nomorLomba')->find($caborId) ?? $assignedCabor->first();
+        $context = $this->resolveCaborContext($request);
+        $cabor = $context['currentCabor'];
+        $event = $context['currentEvent'];
+        $assignedCabor = $context['assignedCabors'];
+        $assignedEvents = $context['assignedEvents'];
 
         if (! $cabor) {
-            return view('cabor.no-cabor');
+            return view('cabor.no-cabor', compact('assignedEvents', 'event'));
         }
 
         $nomorLombaIds = $cabor->nomorLomba->pluck('id');
@@ -60,12 +58,19 @@ class PesertaController extends Controller
 
         $pendaftaran = $query->latest()->paginate(15)->withQueryString();
 
-        return view('cabor.peserta.index', compact('cabor', 'assignedCabor', 'pendaftaran'));
+        return view('cabor.peserta.index', compact('cabor', 'event', 'assignedCabor', 'assignedEvents', 'pendaftaran'));
     }
 
     public function verifikasiShow(Pendaftaran $pendaftaran)
     {
-        $pendaftaran->load(['atlet.kontingen', 'atlet.berkas', 'nomorLomba.cabangOlahraga', 'timKontingen.anggota.atlet.berkas']);
+        $pendaftaran->load(['atlet.kontingen', 'atlet.berkas', 'nomorLomba.cabangOlahraga.event', 'timKontingen.anggota.atlet.berkas']);
+
+        if ($pendaftaran->nomorLomba?->cabangOlahraga) {
+            session([
+                'pj_cabor_active_event_id' => $pendaftaran->nomorLomba->cabangOlahraga->event_id,
+                'pj_cabor_active_cabor_id' => $pendaftaran->nomorLomba->cabang_olahraga_id,
+            ]);
+        }
 
         return view('cabor.peserta.verifikasi', compact('pendaftaran'));
     }

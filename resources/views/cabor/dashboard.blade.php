@@ -12,22 +12,37 @@
             </div>
             <div>
                 <h1 class="text-xl font-bold text-slate-900 dark:text-white">{{ $cabor->nama }}</h1>
-                <p class="text-xs text-slate-500 mt-0.5">{{ $cabor->event?->nama ?? 'Pekan Olahraga' }} &bull; Durasi tanding standar: {{ $cabor->durasi_default_menit }} menit</p>
+                <p class="text-xs text-slate-500 mt-0.5"><span class="font-semibold text-slate-700 dark:text-slate-300">{{ $cabor->event?->nama ?? $event?->nama ?? 'Pekan Olahraga' }}</span> &bull; Durasi tanding: {{ $cabor->durasi_default_menit }} menit</p>
             </div>
         </div>
 
-        @if($assignedCabor->count() > 1)
-            <div class="flex items-center gap-2">
-                <span class="text-xs text-slate-400">Pilih Cabor:</span>
-                <select onchange="window.location.href = '?cabor_id=' + this.value" class="text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 py-1.5 px-3">
-                    @foreach($assignedCabor as $ac)
-                        <option value="{{ $ac->id }}" {{ $cabor->id == $ac->id ? 'selected' : '' }}>
-                            {{ $ac->nama }}
-                        </option>
-                    @endforeach
-                </select>
-            </div>
-        @endif
+        <div class="flex flex-wrap items-center gap-2">
+            @if($assignedEvents->count() > 1)
+                <div class="flex items-center gap-1.5">
+                    <span class="text-xs text-slate-400">Event:</span>
+                    <select onchange="switchCaborEvent(this.value)" class="text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 py-1.5 px-3 text-slate-800 dark:text-slate-200">
+                        @foreach($assignedEvents as $ev)
+                            <option value="{{ $ev->id }}" {{ ($event?->id ?? $cabor->event_id) == $ev->id ? 'selected' : '' }}>
+                                {{ $ev->nama }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+            @endif
+
+            @if($assignedCabor->count() > 1)
+                <div class="flex items-center gap-1.5">
+                    <span class="text-xs text-slate-400">Cabor:</span>
+                    <select onchange="switchCabor(this.value)" class="text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 py-1.5 px-3 text-slate-800 dark:text-slate-200">
+                        @foreach($assignedCabor as $ac)
+                            <option value="{{ $ac->id }}" {{ $cabor->id == $ac->id ? 'selected' : '' }}>
+                                {{ $ac->nama }} ({{ $ac->singkatan }})
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+            @endif
+        </div>
     </div>
 
     {{-- Stats Cards --}}

@@ -15,11 +15,20 @@ class HasilCaborController extends Controller
     public function show(Pertandingan $pertandingan)
     {
         $pertandingan->load([
-            'nomorLomba.cabangOlahraga',
+            'nomorLomba.cabangOlahraga.event',
             'lapangan.venue',
             'peserta.peserta.kontingen',
             'hasil',
         ]);
+
+        if ($pertandingan->nomorLomba?->cabangOlahraga) {
+            session([
+                'pj_cabor_active_event_id' => $pertandingan->nomorLomba->cabangOlahraga->event_id,
+                'pj_cabor_active_cabor_id' => $pertandingan->nomorLomba->cabang_olahraga_id,
+            ]);
+            view()->share('currentEvent', $pertandingan->nomorLomba->cabangOlahraga->event);
+            view()->share('currentCabor', $pertandingan->nomorLomba->cabangOlahraga);
+        }
 
         return view('cabor.hasil.show', compact('pertandingan'));
     }

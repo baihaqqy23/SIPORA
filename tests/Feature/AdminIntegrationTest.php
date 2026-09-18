@@ -50,7 +50,7 @@ class AdminIntegrationTest extends TestCase
             'tanggal_selesai' => '2026-10-10',
             'pendaftaran_mulai' => '2026-09-01',
             'pendaftaran_selesai' => '2026-09-25',
-            'tanggal_patokan_umur' => '2026-10-01',
+            'kategori_usia' => 'senior',
             'maks_nomor_lomba_per_atlet' => 3,
             'status' => 'draft',
         ]);
@@ -71,7 +71,7 @@ class AdminIntegrationTest extends TestCase
             'tanggal_selesai' => '2026-10-10',
             'pendaftaran_mulai' => '2026-09-01',
             'pendaftaran_selesai' => '2026-09-25',
-            'tanggal_patokan_umur' => '2026-10-01',
+            'kategori_usia' => 'senior',
             'maks_nomor_lomba_per_atlet' => 4,
             'status' => 'pendaftaran_dibuka',
         ])->assertRedirect(route('admin.event.show', $event));
@@ -115,8 +115,8 @@ class AdminIntegrationTest extends TestCase
         $this->actingAs($this->adminUser)->get(route('admin.panitia.index'))->assertStatus(200);
         $this->actingAs($this->adminUser)->get(route('admin.panitia.create'))->assertStatus(200);
 
-        // Test store panitia with user account
         $event = Event::first();
+        $cabor = CabangOlahraga::first();
         $response = $this->actingAs($this->adminUser)->post(route('admin.panitia.store'), [
             'event_id' => $event->id,
             'nama' => 'Panitia Baru PJ',
@@ -128,6 +128,7 @@ class AdminIntegrationTest extends TestCase
             'password' => 'password123',
             'password_confirmation' => 'password123',
             'role' => 'pj_cabor',
+            'penugasan_cabor_id' => $cabor->id,
         ]);
         $response->assertRedirect();
 

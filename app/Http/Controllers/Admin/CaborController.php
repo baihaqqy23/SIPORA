@@ -12,27 +12,39 @@ class CaborController extends Controller
 {
     public function index(Request $request)
     {
-        $event = Event::whereIn('status', ['pendaftaran_dibuka', 'berlangsung', 'pendaftaran_ditutup'])->latest()->first();
+        $events = Event::orderBy('nama')->get();
+        $eventId = $request->get('event_id');
 
-        $query = CabangOlahraga::withCount('nomorLomba')
-            ->with('venues')
+        $event = null;
+        if ($eventId) {
+            $event = $events->firstWhere('id', $eventId);
+        } else {
+            $event = Event::whereIn('status', ['pendaftaran_dibuka', 'berlangsung', 'pendaftaran_ditutup'])->latest()->first() ?? $events->first();
+        }
+
+        $query = CabangOlahraga::with(['event', 'venues'])
+            ->withCount('nomorLomba')
             ->when($request->filled('q'), fn ($q) => $q->where('nama', 'like', '%'.$request->q.'%'));
 
-        if ($event) {
+        if ($request->has('event_id') && $request->filled('event_id')) {
+            $query->where('event_id', $request->event_id);
+        } elseif ($event) {
             $query->where('event_id', $event->id);
         }
 
         $cabors = $query->orderBy('nama')->paginate(20)->withQueryString();
 
-        return view('admin.cabor.index', compact('cabors', 'event'));
+        return view('admin.cabor.index', compact('cabors', 'event', 'events'));
     }
 
-    public function create()
+    public function create(Request $request)
     {
-        $event = Event::whereIn('status', ['pendaftaran_dibuka', 'berlangsung', 'pendaftaran_ditutup', 'draft'])->latest()->first();
+        $events = Event::orderBy('nama')->get();
+        $eventId = $request->get('event_id');
+        $event = $eventId ? $events->firstWhere('id', $eventId) : (Event::whereIn('status', ['pendaftaran_dibuka', 'berlangsung', 'pendaftaran_ditutup', 'draft'])->latest()->first() ?? $events->first());
         $venues = Venue::when($event, fn ($q) => $q->where('event_id', $event->id))->orderBy('nama')->get();
 
-        return view('admin.cabor.create', compact('event', 'venues'));
+        return view('admin.cabor.create', compact('event', 'events', 'venues'));
     }
 
     public function store(Request $request)

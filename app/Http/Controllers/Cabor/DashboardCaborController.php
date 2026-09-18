@@ -2,29 +2,26 @@
 
 namespace App\Http\Controllers\Cabor;
 
+use App\Http\Controllers\Cabor\Concerns\HasCaborContext;
 use App\Http\Controllers\Controller;
-use App\Models\CabangOlahraga;
 use App\Models\Pendaftaran;
 use App\Models\Pertandingan;
 use Illuminate\Http\Request;
 
 class DashboardCaborController extends Controller
 {
+    use HasCaborContext;
+
     public function index(Request $request)
     {
-        $user = auth()->user();
-        $assignedCabor = $user->caborDitugaskan();
-
-        // If admin, can view any cabor
-        if ($user->isAdmin() && $assignedCabor->isEmpty()) {
-            $assignedCabor = CabangOlahraga::all();
-        }
-
-        $caborId = $request->get('cabor_id', $assignedCabor->first()?->id);
-        $cabor = CabangOlahraga::with(['nomorLomba', 'venues'])->find($caborId) ?? $assignedCabor->first();
+        $context = $this->resolveCaborContext($request);
+        $cabor = $context['currentCabor'];
+        $event = $context['currentEvent'];
+        $assignedCabor = $context['assignedCabors'];
+        $assignedEvents = $context['assignedEvents'];
 
         if (! $cabor) {
-            return view('cabor.no-cabor');
+            return view('cabor.no-cabor', compact('assignedEvents', 'event'));
         }
 
         $nomorLombaIds = $cabor->nomorLomba->pluck('id');
@@ -62,7 +59,9 @@ class DashboardCaborController extends Controller
 
         return view('cabor.dashboard', compact(
             'cabor',
+            'event',
             'assignedCabor',
+            'assignedEvents',
             'totalNomorLomba',
             'totalPendaftaran',
             'menungguVerifikasi',

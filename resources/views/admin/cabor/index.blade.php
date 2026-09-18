@@ -28,14 +28,24 @@
         </a>
     </div>
 
-    {{-- Search --}}
-    <form method="GET" action="{{ route('admin.cabor.index') }}" class="flex gap-2">
-        <div class="relative flex-1 max-w-sm">
+    {{-- Search & Event Filter --}}
+    <form method="GET" action="{{ route('admin.cabor.index') }}" class="flex flex-wrap items-center gap-2">
+        <div class="relative flex-1 min-w-[200px] max-w-sm">
             <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
             <input type="text" name="q" value="{{ request('q') }}" placeholder="Cari nama cabor..." class="w-full rounded-lg border border-neutral-200 bg-white py-2 pl-9 pr-3 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400">
         </div>
-        <button type="submit" class="rounded-lg border border-neutral-200 bg-white px-3.5 py-2 text-xs font-medium text-neutral-700 hover:bg-neutral-50 transition-colors">Cari</button>
-        @if(request('q'))
+        <div class="w-56">
+            <select name="event_id" onchange="this.form.submit()" class="w-full rounded-lg border border-neutral-200 bg-white py-2 px-3 text-xs text-neutral-800 focus:border-neutral-400 focus:outline-none">
+                <option value="">-- Semua Event --</option>
+                @foreach($events as $ev)
+                    <option value="{{ $ev->id }}" {{ (request('event_id') == $ev->id || (!request('event_id') && $event?->id == $ev->id)) ? 'selected' : '' }}>
+                        {{ $ev->nama }}
+                    </option>
+                @endforeach
+            </select>
+        </div>
+        <button type="submit" class="rounded-lg border border-neutral-200 bg-white px-3.5 py-2 text-xs font-medium text-neutral-700 hover:bg-neutral-50 transition-colors">Filter</button>
+        @if(request('q') || request('event_id'))
             <a href="{{ route('admin.cabor.index') }}" class="rounded-lg border border-neutral-200 bg-white px-3.5 py-2 text-xs font-medium text-neutral-500 hover:bg-neutral-50 transition-colors">Reset</a>
         @endif
     </form>

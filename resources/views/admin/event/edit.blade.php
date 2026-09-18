@@ -71,13 +71,18 @@
                 </div>
 
                 <div>
-                    <label for="tanggal_patokan_umur" class="block text-xs font-semibold text-neutral-700 uppercase tracking-wider mb-2">
+                    <label for="kategori_usia" class="block text-xs font-semibold text-neutral-700 uppercase tracking-wider mb-2">
                         Patokan Usia Atlet <span class="text-red-500">*</span>
                     </label>
-                    <input type="date" id="tanggal_patokan_umur" name="tanggal_patokan_umur" required
-                           value="{{ old('tanggal_patokan_umur', $event->tanggal_patokan_umur ? $event->tanggal_patokan_umur->format('Y-m-d') : '') }}"
-                           class="w-full text-sm border-neutral-200 rounded-lg focus:border-blue-500 focus:ring-blue-500 @error('tanggal_patokan_umur') border-red-500 @enderror">
-                    @error('tanggal_patokan_umur')
+                    <select id="kategori_usia" name="kategori_usia" required
+                            class="w-full text-sm border-neutral-200 rounded-lg focus:border-blue-500 focus:ring-blue-500 @error('kategori_usia') border-red-500 @enderror">
+                        @foreach(\App\Models\Event::daftarKategoriUsia() as $kode => $info)
+                            <option value="{{ $kode }}" {{ old('kategori_usia', $event->kategori_usia) == $kode ? 'selected' : '' }}>
+                                {{ $info['label'] }}
+                            </option>
+                        @endforeach
+                    </select>
+                    @error('kategori_usia')
                         <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
                     @enderror
                 </div>
